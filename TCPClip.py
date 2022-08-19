@@ -43,7 +43,8 @@
 #   Notice No.3: Compression threads are 1 by default, so no threadpool at all. You can set it to 0 and we will use half of script threads or set your own value (min 2 workers).
 #
 
-from vapoursynth import core, VideoNode, VideoFrame  # pylint: disable=no-name-in-module
+from vapoursynth import core, VideoNode, VideoFrame, VideoOutputTuple  # pylint: disable=no-name-in-module
+import vapoursynth as vs
 import numpy as np
 import socket
 from socket import AddressFamily  # pylint: disable=no-name-in-module
@@ -209,9 +210,14 @@ class Server():
         self.compression_method = compression_method
         self.compression_level = compression_level
         self.compression_threads = compression_threads
-        if not isinstance(clip, VideoNode):
-            Util().message('crit', 'argument "clip" has wrong type.')
-            sys.exit(2)
+        if vs.__api_version__.api_major >= 4:
+            if not isinstance(clip, VideoOutputTuple):
+                Util().message('crit', 'argument "clip" has wrong type.')
+                sys.exit(2)
+        else:
+            if not isinstance(clip, VideoNode):
+                Util().message('crit', 'argument "clip" has wrong type.')
+                sys.exit(2)
         if self.compression_method != None:
             self.compression_method = self.compression_method.lower()
             if self.compression_method == 'lzo' and not lzo_imported:
@@ -224,7 +230,10 @@ class Server():
         if self.compression_threads != 1:
             self.compression_pool = ThreadPoolExecutor(
                 max_workers=max(self.compression_threads, 2))
-        self.clip = clip
+        if vs.__api_version__.api_major >= 4:
+            self.clip = clip.clip
+        else:
+            self.clip = clip
         self.frame_queue_buffer = dict()
         self.cframe_queue_buffer = dict()
         self.last_queued_frame = -1
@@ -349,8 +358,8 @@ class Server():
             out_frame = self.clip.get_frame_async(frame).result()
             self.last_queued_frame = frame
         frame_data = []
-        for plane in out_frame.planes():
-            frame_data.append(np.asarray(plane))
+        for plane in range(out_frame.format.num_planes):
+            frame_data.append(np.asarray(out_frame[plane]))
         frame_data = lzo.compress(pickle.dumps(
             frame_data), self.compression_level)
         if pipe:
@@ -394,7 +403,7 @@ class Server():
             except KeyError:
                 out_frame = self.clip.get_frame_async(frame).result()
                 self.last_queued_frame = frame
-            frame_data = [np.asarray(plane) for plane in out_frame.planes()]
+            frame_data = [np.asarray(out_frame[plane]) for plane in range(out_frame.format.num_planes)]
             frame_props = dict(out_frame.props)
         if self.compression_method == 'lzo' and self.compression_threads == 1:
             frame_data = lzo.compress(pickle.dumps(
@@ -578,7 +587,8 @@ class Client():
             if self.compression_method == 'lzo':
                 frame_data = pickle.loads(lzo.decompress(frame_data))
             for p in range(fout.format.num_planes):
-                np.asarray(fout.get_write_array(p))[:] = frame_data[p]
+                np.copyto(np.asarray(fout[p]), frame_data[p])
+                # np.asarray(fout.get_write_array(p))[:] = frame_data[p]
             for i in frame_props:
                 fout.props[i] = frame_props[i]
             return fout
