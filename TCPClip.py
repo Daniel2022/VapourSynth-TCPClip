@@ -43,8 +43,7 @@
 #   Notice No.3: Compression threads are 1 by default, so no threadpool at all. You can set it to 0 and we will use half of script threads or set your own value (min 2 workers).
 #
 
-from vapoursynth import core, VideoNode, VideoFrame, VideoOutputTuple  # pylint: disable=no-name-in-module
-import vapoursynth as vs
+from vapoursynth import core, VideoNode, VideoFrame  # pylint: disable=no-name-in-module
 import numpy as np
 import socket
 from socket import AddressFamily  # pylint: disable=no-name-in-module
@@ -60,6 +59,10 @@ from threading import Thread
 from concurrent.futures import ThreadPoolExecutor
 from enum import Enum, IntEnum
 from typing import cast, Any, Union, List, Tuple
+
+import vapoursynth as vs
+if vs.__api_version__.api_major >= 4:
+    from vapoursynth import VideoOutputTuple
 
 try:
     from psutil import Process
@@ -588,7 +591,6 @@ class Client():
                 frame_data = pickle.loads(lzo.decompress(frame_data))
             for p in range(fout.format.num_planes):
                 np.copyto(np.asarray(fout[p]), frame_data[p])
-                # np.asarray(fout.get_write_array(p))[:] = frame_data[p]
             for i in frame_props:
                 fout.props[i] = frame_props[i]
             return fout
