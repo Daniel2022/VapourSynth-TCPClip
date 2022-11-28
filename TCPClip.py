@@ -213,12 +213,8 @@ class Server():
         self.compression_method = compression_method
         self.compression_level = compression_level
         self.compression_threads = compression_threads
-        if vs.__api_version__.api_major >= 4:
+        if not isinstance(clip, VideoNode):
             if not isinstance(clip, VideoOutputTuple):
-                Util().message('crit', 'argument "clip" has wrong type.')
-                sys.exit(2)
-        else:
-            if not isinstance(clip, VideoNode):
                 Util().message('crit', 'argument "clip" has wrong type.')
                 sys.exit(2)
         if self.compression_method != None:
@@ -233,7 +229,7 @@ class Server():
         if self.compression_threads != 1:
             self.compression_pool = ThreadPoolExecutor(
                 max_workers=max(self.compression_threads, 2))
-        if vs.__api_version__.api_major >= 4:
+        if isinstance(clip, VideoOutputTuple):
             self.clip = clip.clip
         else:
             self.clip = clip
